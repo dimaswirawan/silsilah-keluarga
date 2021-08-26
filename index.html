@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Silsilah Keluarga</title>
+	<link rel="stylesheet" href="https://dimaswirawan.github.io/atmo/public/css/minifw.css">
+</head>
+<body>
+	<div id="root"></div>
+	<script src="https://dimaswirawan.github.io/atmo/public/library/jui/Model_jui.js"></script>
+	<script src="https://dimaswirawan.github.io/atmo/public/library/jui/Jui.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+
+	<script>
+	const firebaseConfig = {
+		apiKey: "AIzaSyB2DswAJsQ1n9XLd7LUtFMoHiQ4k8_SwfE",
+		authDomain: "belajar1-5abff.firebaseapp.com",
+		databaseURL: "https://belajar1-5abff.firebaseio.com",
+		projectId: "belajar1-5abff",
+		storageBucket: "belajar1-5abff.appspot.com",
+		messagingSenderId: "839513569770",
+		appId: "1:839513569770:web:adc48f9bcf0ff34b47da93"
+	};
+
+	firebase.initializeApp(firebaseConfig);
+	var db = firebase.firestore();
+	var ui = new Jui();
+
+	(async function() {
+		var punjer = []
+		let individuRef = db.collection('individu');
+		let allindividu = await individuRef
+			.where("punjer","==", true)
+			.get();
+
+		for (var i = 0; i < allindividu.docs.length; i++) {
+			var item_individu = allindividu.docs[i].data();
+			item_individu.id = allindividu.docs[i].id;
+			punjer.push(item_individu);
+		}
+		
+		var konten = `<div class="p-3">
+		`
+		konten += ui.getList(punjer,"nama","renderDetail");
+
+		konten += "</div>";
+
+		document.getElementById('root').innerHTML = konten;
+
+	})();
+	async function renderDetail(e) {
+		var data = JSON.parse(e.dataset.data);
+
+		var konten = `<div class="p-3">`;
+		var tahun_kematian = ``;
+		if (data.tahun_kematian != "") {
+			tahun_kematian = `
+				<div class="col-3">
+					Meninggal
+				</div>
+				<div class="col-9">
+					: ${data.tahun_kematian}
+				</div>
+			`
+		}
+		var alias =""
+		if (data.alias != "") {
+			alias = `<b>(${data.alias})</b>`
+		}
+		konten += `
+			<h4>Biodata ${data.nama}</h4>
+			${alias}
+			<div class="row mt-3 mb-3">
+				<div class="col-3">
+					Alamat
+				</div>
+				<div class="col-9">
+					: ${data.alamat_terakhir}
+				</div>
+				${tahun_kematian}
+			</div>
+
+		`
+
+		let list_pernikahan;
+
+		let pernikahanRef = db.collection('pernikahan');
+		var key_pasangan = "";
+		if (data.jenis_kelamin == "pria") {
+			key_pasangan = "istri";
+			list_pernikahan = await pernikahanRef
+				.where("suami","==", data.id)
+				.get();
+		}else{
+			key_pasangan = "suami";
+			list_pernikahan = await pernikahanRef
+				.where("istri","==", data.id)
+				.get();
+		}
+
+		var pernikahan = []
+
+		for (var i = 0; i < list_pernikahan.docs.length; i++) {
+			var item_individu = list_pernikahan.docs[i].data();
+			item_individu.id = list_pernikahan.docs[i].id;
+			pernikahan.push(item_individu);
+		}
+
+		if (pernikahan.length == 1) {
+			var pasangan = "";
+			var data_pasangan = await getSingle("individu", pernikahan[0][key_pasangan]);
+			pasangan = data_pasangan.nama;
+			konten += `<b>${data.nama}</b> Menikah Dengan <b><span data-data='${JSON.stringify(data_pasangan)}' onclick="renderDetail(this)">${pasangan}</span></b>`
+
+			var anak = [];
+			let anakRef = db.collection('individu');
+			let allAnak = await anakRef
+				.where("parent","==", pernikahan[0].id)
+				.get();
+
+			for (var i = 0; i < allAnak.docs.length; i++) {
+				var item_individu = allAnak.docs[i].data();
+				item_individu.id = allAnak.docs[i].id;
+				anak.push(item_individu);
+			}
+
+			if (anak.length > 0) {
+				konten += `<h4 class="mt-1">Mempunyai Anak</h4>`;
+				konten += `<ul>`
+				for (var i = 0; i < anak.length; i++) {
+					konten += `<li><span data-data='${JSON.stringify(anak[i])}' onclick="renderDetail(this)">${anak[i].nama}</span></li>`
+				}
+				konten += `</ul>`;
+
+			}
+		}else if (pernikahan.length > 1) {
+		}else{
+			konten += `<h5>(Belum Menikah)</h5>`
+		}
+
+		if (data.parent != "") {
+			konten += `<h4 class="mt-3">Orang Tua</h4>`;
+			var data_orang_tua = await getSingle("pernikahan", data.parent);
+			var data_bapak =  await getSingle("individu", data_orang_tua.suami);
+			var data_ibu =  await getSingle("individu", data_orang_tua.istri);
+
+			konten += `
+				<div class="row mb-3">
+					<div class="col-3">
+						<b>Bapak</b>
+					</div>
+					<div class="col-9">
+						: <span data-data='${JSON.stringify(data_bapak)}' onclick="renderDetail(this)">${data_bapak.nama}</span>
+					</div>
+					<div class="col-3">
+						<b>Ibu</b>
+					</div>
+					<div class="col-9">
+						: <span data-data='${JSON.stringify(data_ibu)}' onclick="renderDetail(this)">${data_ibu.nama}</span>
+					</div>
+
+				</div>
+			`;
+			var dulur = "";
+			var saudara = [];
+			let saudaraRef = db.collection('individu');
+			let allsaudara = await saudaraRef
+				.where("parent","==", data.parent)
+				.get();
+
+			for (var i = 0; i < allsaudara.docs.length; i++) {
+				var item_saudara = allsaudara.docs[i].data();
+				item_saudara.id = allsaudara.docs[i].id;
+				saudara.push(item_saudara);
+				if (item_saudara.id != data.id) {
+					dulur += `<li><span data-data='${JSON.stringify(item_saudara)}' onclick="renderDetail(this)">${item_saudara.nama}</span></li>`
+				}
+			};
+			if (dulur != "") {
+				konten += `<h4>Saudara</h4>
+				<ul>${dulur}</ul>`
+			}
+		}
+		konten += "</div>"
+		document.getElementById('root').innerHTML = konten;
+	}
+
+	async function getSingle(tabel, id) {
+	    return db.collection(tabel)
+	    		.doc(id)
+	    		.get()
+	    		.then(function (doc) {
+	    			var item = doc.data();
+	    			item.id = doc.id;
+	    			return item;
+	    		});
+	}
+	</script>
+</body>
+</html>
